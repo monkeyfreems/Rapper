@@ -86,13 +86,14 @@
     Example:<br>
     <code>Dan: 1,2,3,4,5; tumble: yes</code><br>
     <code>Alice: 2,3; tumble: no</code><br>
-    Positions are 1–5. "Tumble: yes" means they can somersault at any of 1, 3 or 5.
+    Positions are 1–5. The <strong>first</strong> position listed is treated as that dancer's
+    strongest / preferred position. "Tumble: yes" means they can somersault at any of 1, 3 or 5.
   </p>
 
   <label for="dancersInput">Dancers, positions and tumble ability</label>
   <textarea id="dancersInput" rows="10" placeholder="Dan: 1,2,3,4,5; tumble: yes
 Alice: 2,3; tumble: no
-Bob: 1,5; tumble: yes
+Bob: 5,1,3; tumble: yes
 ..."></textarea>
 
   <label for="numDances">Number of dances</label>
@@ -105,7 +106,7 @@ Bob: 1,5; tumble: yes
   <div id="results"></div>
 
   <script>
-    const STORAGE_KEY = 'rapperSchedulerConfigV4';
+    const STORAGE_KEY = 'rapperSchedulerConfigV5';
 
     function loadConfig() {
       try {
@@ -161,6 +162,8 @@ Bob: 1,5; tumble: yes
 
         if (positions.length === 0) continue;
 
+        const primaryPosition = positions[0]; // first listed = strongest
+
         let canTumble = false;
         if (tumblePart.includes('tumble')) {
           if (tumblePart.includes('yes') ||
@@ -178,6 +181,7 @@ Bob: 1,5; tumble: yes
         dancers.push({
           name,
           positions,
+          primaryPosition,
           canTumble,
           count: 0
         });
@@ -186,7 +190,7 @@ Bob: 1,5; tumble: yes
       return dancers;
     }
 
-    // NEW LOGIC: share out dances first, tumble second
+    // Fair share first, then strongest position, then tumble preference
     function generateSchedule(dancers, numDances) {
       const numPositions = 5;
       const schedule = [];
@@ -205,17 +209,23 @@ Bob: 1,5; tumble: yes
             continue;
           }
 
-          // Fairness first: fewest dances so far
-          // If tied and this is a tumble position, prefer tumblers
           eligible.sort((a, b) => {
+            // 1) Share dances out first
             if (a.count !== b.count) return a.count - b.count;
 
+            // 2) Prefer people whose strongest position is this one
+            const aPrimaryMatch = a.primaryPosition === pos;
+            const bPrimaryMatch = b.primaryPosition === pos;
+            if (aPrimaryMatch !== bPrimaryMatch) {
+              return aPrimaryMatch ? -1 : 1; // strongest wins
+            }
+
+            // 3) For 1,3,5, prefer tumblers on tie
             if ([1, 3, 5].includes(pos) && a.canTumble !== b.canTumble) {
-              // tie on count: tumblers first in 1/3/5
               return a.canTumble ? -1 : 1;
             }
 
-            // final tie-break: name
+            // 4) Final tie-break: name
             return a.name.localeCompare(b.name);
           });
 
